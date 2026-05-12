@@ -69,8 +69,15 @@ def execute_playback(playlist_uri, is_song=False):
         return False
 
     if is_song:
-        print("Song detected, waiting 1s and pressing Enter...")
-        time.sleep(1.5)
+        print("Song detected, focusing Spotify...")
+        try:
+            spotify_windows = [w for w in gw.getWindowsWithTitle('Spotify') if w.width > 200]
+            if spotify_windows:
+                spotify_windows[0].activate()
+                time.sleep(0.5)
+        except: pass
+        
+        print("Pressing Enter...")
         pyautogui.press('enter')
         return True
 
@@ -103,6 +110,14 @@ def execute_playback(playlist_uri, is_song=False):
                             screen_x = search_region["left"] + x
                             screen_y = search_region["top"] + y
                             print(f"Fast Match! Play Button at {screen_x}, {screen_y}")
+                            
+                            # Force focus before clicking
+                            try:
+                                if spotify_windows:
+                                    spotify_windows[0].activate()
+                                    time.sleep(0.2)
+                            except: pass
+                            
                             pyautogui.click(screen_x, screen_y)
                             return True
                 return False
@@ -118,6 +133,12 @@ def execute_playback(playlist_uri, is_song=False):
         time.sleep(0.1) 
         
     print("Falling back to Alt+Shift+P...")
+    try:
+        spotify_windows = [w for w in gw.getWindowsWithTitle('Spotify') if w.width > 200]
+        if spotify_windows:
+            spotify_windows[0].activate()
+            time.sleep(0.3)
+    except: pass
     pyautogui.hotkey('alt', 'shift', 'p')
     return True
 
