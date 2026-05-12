@@ -120,16 +120,20 @@ def execute_playback(playlist_uri, is_song=False):
                             try:
                                 if spotify_windows:
                                     spotify_windows[0].activate()
-                                    time.sleep(0.2)
+                                    time.sleep(0.5) # Increased for stability
                             except: pass
                             
-                            pyautogui.click(screen_x, screen_y)
+                            # Slower click duration helps Spotify register the input
+                            pyautogui.click(screen_x, screen_y, duration=0.1)
                             return True
                 return False
         except Exception as e:
             print(f"Scan error: {e}")
             return False
 
+    # Wait a moment for the window to actually open before scanning
+    time.sleep(1.0)
+    
     # Extreme Polling: 0.1s interval for maximum speed
     print("Fast Scanning for Play button...")
     for attempt in range(60): # 60 attempts * 0.1s = 6 seconds total
