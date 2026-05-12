@@ -86,7 +86,7 @@ def ble_worker():
 
     loop.run_until_complete(run())
 
-def execute_playback(playlist_uri, is_song=False):
+def execute_playback(playlist_uri, led_hex, is_song=False):
     print(f"Opening: {playlist_uri}")
     result = os.system(f"start {playlist_uri}")
     
@@ -106,6 +106,9 @@ def execute_playback(playlist_uri, is_song=False):
         
         print("Pressing Enter...")
         pyautogui.press('enter')
+        
+        # Sync LEDs with track start
+        color_queue.put(led_hex)
         return True
 
     def find_and_click_play():
@@ -147,6 +150,9 @@ def execute_playback(playlist_uri, is_song=False):
                             
                             # Slower click duration helps Spotify register the input
                             pyautogui.click(screen_x, screen_y, duration=0.1)
+                            
+                            # Sync LEDs with playlist start
+                            color_queue.put(led_hex)
                             return True
                 return False
         except Exception as e:
@@ -171,6 +177,9 @@ def execute_playback(playlist_uri, is_song=False):
             time.sleep(0.3)
     except: pass
     pyautogui.hotkey('alt', 'shift', 'p')
+    
+    # Sync LEDs with fallback play
+    color_queue.put(led_hex)
     return True
 
 @app.route('/<name>', methods=['GET'])
@@ -188,12 +197,9 @@ def trigger_mood(name):
     if target:
         print(f"Received request for /{name}")
         
-        # 1. Queue LED update immediately (Instant!)
+        # Launch Spotify & Playback (LEDs will sync inside this function)
         led_hex = target["hex"]
-        color_queue.put(led_hex)
-        
-        # 2. Launch Spotify & Playback
-        execute_playback(target["uri"], is_song=is_song)
+        execute_playback(target["uri"], led_hex, is_song=is_song)
         
         return f"Started {name} and updated LEDs", 200
     return f"Mood '{name}' not found", 404
