@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, render_template
 import os
 import time
 import pyautogui
@@ -181,6 +181,10 @@ def execute_playback(playlist_uri, led_hex, is_song=False):
     # Sync LEDs with fallback play
     color_queue.put(led_hex)
     return True
+
+@app.route('/', methods=['GET'])
+def index():
+    return render_template('index.html', playlists=PLAYLISTS, songs=SONGS)
 
 @app.route('/<name>', methods=['GET'])
 def trigger_mood(name):

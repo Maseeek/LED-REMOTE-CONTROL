@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LED Remote Control</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0a0a0c;
+            --card-bg: #16161a;
+            --text: #f0f0f0;
+            --text-dim: #a0a0a0;
+            --accent: #1db954; /* Spotify Green */
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
+            padding: 2rem 1rem;
+        }
+
+        header {
+            text-align: center;
+            margin-bottom: 3rem;
+        }
+
+        h1 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            background: linear-gradient(90deg, #fff, var(--accent));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        p {
+            color: var(--text-dim);
+            font-weight: 300;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 1000px;
+        }
+
+        section {
+            margin-bottom: 3rem;
+        }
+
+        h2 {
+            font-size: 1.2rem;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            margin-bottom: 1.5rem;
+            color: var(--text-dim);
+            border-left: 3px solid var(--accent);
+            padding-left: 1rem;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 1.5rem;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            padding: 1.5rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            min-height: 140px;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+            background: #1c1c22;
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+
+        .card:active {
+            transform: scale(0.95);
+        }
+
+        .card h3 {
+            font-size: 1.25rem;
+            text-transform: capitalize;
+            margin-bottom: 0.25rem;
+            z-index: 2;
+        }
+
+        .card .type {
+            font-size: 0.75rem;
+            color: var(--text-dim);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            z-index: 2;
+        }
+
+        .glow {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0.1;
+            transition: opacity 0.3s ease;
+            z-index: 1;
+        }
+
+        .card:hover .glow {
+            opacity: 0.3;
+        }
+
+        /* Status Indicator */
+        #status {
+            position: fixed;
+            bottom: 2rem;
+            padding: 1rem 2rem;
+            border-radius: 50px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            font-size: 0.9rem;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        #status.visible {
+            opacity: 1;
+        }
+
+        @media (max-width: 600px) {
+            .grid {
+                grid-template-columns: 1fr 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>Remote Control</h1>
+        <p>Atmosphere & Music Sync</p>
+    </header>
+
+    <div class="container">
+        <section>
+            <h2>Playlists</h2>
+            <div id="playlist-grid" class="grid">
+                <!-- Injected via JS -->
+            </div>
+        </section>
+
+        <section>
+            <h2>Songs</h2>
+            <div id="song-grid" class="grid">
+                <!-- Injected via JS -->
+            </div>
+        </section>
+    </div>
+
+    <div id="status">Updating Atmosphere...</div>
+
+    <script>
+        // Use the colors from your Python config to create the UI
+        const playlists = {{ playlists | tojson }};
+        const songs = {{ songs | tojson }};
+
+        function hexToRgba(hex, alpha = 1) {
+            let r = parseInt(hex.slice(8, 10), 16) || 255;
+            let g = parseInt(hex.slice(10, 12), 16) || 255;
+            let b = parseInt(hex.slice(12, 14), 16) || 255;
+            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+        }
+
+        function createCard(name, data, type) {
+            const card = document.createElement('div');
+            card.className = 'card';
+            const color = hexToRgba(data.hex);
+            
+            card.innerHTML = `
+                <div class="glow" style="background: radial-gradient(circle, ${color} 0%, transparent 70%);"></div>
+                <h3 style="color: ${color}">${name}</h3>
+                <span class="type">${type}</span>
+            `;
+
+            card.style.boxShadow = `0 4px 20px -5px ${hexToRgba(data.hex, 0.2)}`;
+            
+            card.onclick = async () => {
+                showStatus(`Activating ${name}...`);
+                try {
+                    const response = await fetch(`/${name}`);
+                    if (response.ok) {
+                        showStatus(`Started ${name}`);
+                    } else {
+                        showStatus(`Error triggering ${name}`);
+                    }
+                } catch (err) {
+                    showStatus('Connection Error');
+                }
+            };
+
+            return card;
+        }
+
+        function showStatus(msg) {
+            const status = document.getElementById('status');
+            status.innerText = msg;
+            status.classList.add('visible');
+            setTimeout(() => status.classList.remove('visible'), 3000);
+        }
+
+        // Initialize grids
+        const pGrid = document.getElementById('playlist-grid');
+        Object.entries(playlists).forEach(([name, data]) => {
+            pGrid.appendChild(createCard(name, data, 'Playlist'));
+        });
+
+        const sGrid = document.getElementById('song-grid');
+        Object.entries(songs).forEach(([name, data]) => {
+            sGrid.appendChild(createCard(name, data, 'Track'));
+        });
+    </script>
+</body>
+</html>
