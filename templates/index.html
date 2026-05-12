@@ -437,7 +437,7 @@
         /* LED Controls */
         .led-controls-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
             gap: 2rem;
         }
 
@@ -462,6 +462,28 @@
         .control-card h3 {
             font-size: 1.5rem;
             font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+
+        .preset-colors {
+            display: flex;
+            gap: 0.75rem;
+            flex-wrap: wrap;
+            margin-top: 1rem;
+        }
+
+        .preset-btn {
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            border: 2px solid transparent;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .preset-btn:hover {
+            transform: scale(1.2);
+            border-color: #fff;
         }
 
         .color-picker-container {
@@ -542,6 +564,32 @@
             text-transform: uppercase;
             letter-spacing: 1px;
             margin-bottom: -0.5rem;
+            display: block;
+        }
+
+        /* Mobile Adjustments */
+        @media (max-width: 600px) {
+            header { padding-top: 4rem; padding-bottom: 2rem; }
+            h1 { font-size: 3.5rem; }
+            .grid { grid-template-columns: 1fr 1fr; gap: 1rem; }
+            .card { padding: 1.5rem; border-radius: 24px; gap: 0.75rem; }
+            .card h3 { font-size: 1.1rem; }
+            .card-icon { width: 44px; height: 44px; border-radius: 14px; }
+            
+            .led-controls-grid { grid-template-columns: 1fr; gap: 1rem; }
+            .control-card { padding: 1.75rem; border-radius: 28px; }
+            .color-picker-container { flex-direction: column; align-items: flex-start; gap: 1rem; }
+            input[type="color"] { width: 100%; height: 60px; border-radius: 16px; }
+            input[type="color"]::-webkit-color-swatch { border-radius: 12px; }
+            
+            #now-playing { 
+                width: calc(100% - 1.5rem); 
+                bottom: 1rem; 
+                padding: 0.75rem 1.25rem;
+                border-radius: 30px;
+            }
+            .status-visual { width: 36px; height: 36px; }
+            #track-name { font-size: 0.95rem; }
         }
     </style>
 </head>
@@ -590,16 +638,25 @@
                     <h3>Static Color</h3>
                     <div class="color-picker-container">
                         <input type="color" id="led-color-picker" value="#1db954">
-                        <div>
-                            <div class="control-label">Pick any color</div>
-                            <p style="color: var(--text-dim); font-size: 0.9rem; margin-top: 0.5rem;">Instantly applied to LED strips via Bluetooth</p>
+                        <div style="flex: 1;">
+                            <div class="control-label">Custom Selection</div>
+                            <div class="preset-colors">
+                                <div class="preset-btn" style="background: #ff0000;" data-color="#ff0000"></div>
+                                <div class="preset-btn" style="background: #00ff00;" data-color="#00ff00"></div>
+                                <div class="preset-btn" style="background: #0000ff;" data-color="#0000ff"></div>
+                                <div class="preset-btn" style="background: #ffa500;" data-color="#ffa500"></div>
+                                <div class="preset-btn" style="background: #800080;" data-color="#800080"></div>
+                                <div class="preset-btn" style="background: #ffffff;" data-color="#ffffff"></div>
+                            </div>
                         </div>
                     </div>
                 </div>
                 <div class="control-card">
                     <h3>Dynamic Modes</h3>
-                    <span class="control-label">Effect Mode</span>
-                    <select id="led-mode-select" class="custom-select">
+                    <div style="display: flex; flex-direction: column; gap: 1.25rem;">
+                        <div>
+                            <span class="control-label">Effect Mode</span>
+                            <select id="led-mode-select" class="custom-select" style="margin-top: 0.5rem;">
                         <option value="128">Seven Color Cross Fade</option>
                         <option value="129">Red Gradual Change</option>
                         <option value="130">Green Gradual Change</option>
@@ -613,10 +670,14 @@
                         <option value="138">Green Blue Cross Fade</option>
                         <option value="139">Seven Color Strobe Flash</option>
                         <option value="147">Seven Color Jumping Change</option>
-                    </select>
-                    
-                    <span class="control-label" style="margin-top: 0.5rem;">Speed (Fast → Slow)</span>
-                    <input type="range" id="led-speed-range" class="custom-range" min="1" max="31" value="10">
+                            </select>
+                        </div>
+                        
+                        <div>
+                            <span class="control-label">Speed (Fast → Slow)</span>
+                            <input type="range" id="led-speed-range" class="custom-range" min="1" max="31" value="10" style="margin-top: 1rem;">
+                        </div>
+                    </div>
                 </div>
             </div>
         </section>
@@ -648,11 +709,15 @@
         const songs = {{ songs | tojson }};
 
         function hexToRgba(hex, alpha = 1) {
-            // Extract RGB from 7e070503RRGGBB10ef
-            let r = parseInt(hex.slice(8, 10), 16) || 255;
-            let g = parseInt(hex.slice(10, 12), 16) || 255;
-            let b = parseInt(hex.slice(12, 14), 16) || 255;
-            return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+            // Check if it's a color command (18 chars: 7e070503RRGGBB10ef)
+            if (hex.length === 18 && hex.startsWith('7e070503')) {
+                const r = parseInt(hex.slice(8, 10), 16);
+                const g = parseInt(hex.slice(10, 12), 16);
+                const b = parseInt(hex.slice(12, 14), 16);
+                return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+            }
+            // Fallback for modes or unknown formats (Spotify Green)
+            return `rgba(29, 185, 84, ${alpha})`;
         }
 
         function createCard(name, data, type) {
@@ -779,8 +844,19 @@
         document.getElementById('led-mode-select').addEventListener('change', handleModeChange);
         document.getElementById('led-speed-range').addEventListener('input', handleModeChange);
 
+        // Preset buttons
+        document.querySelectorAll('.preset-btn').forEach(btn => {
+            btn.onclick = () => {
+                const color = btn.getAttribute('data-color');
+                const picker = document.getElementById('led-color-picker');
+                picker.value = color;
+                handleColorChange(color);
+            };
+        });
+
         // Status Polling
         let lastTitle = "";
+        let lastColor = "";
         async function updateStatus() {
             try {
                 const response = await fetch('/status');
@@ -795,13 +871,14 @@
                     lastTitle = data.title;
                 }
                 
-                if (data.color) {
+                if (data.color && data.color !== lastColor) {
                     const activeColor = hexToRgba(data.color);
                     const bars = document.querySelectorAll('.wave-bar');
                     bars.forEach(bar => bar.style.background = activeColor);
                     
-                    // Smoothly transition background if color changed
-                    // (Managed by cards and global state)
+                    // Sync background blobs with the current LED color
+                    document.querySelectorAll('.blob').forEach(b => b.style.background = activeColor);
+                    lastColor = data.color;
                 }
 
                 if (data.playing) {
