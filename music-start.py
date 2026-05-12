@@ -35,6 +35,26 @@ PLAYLISTS = {
     "italy": {
         "uri": "spotify:playlist:2QWl1UykngbHZoeoJsSP90", 
         "hex": "7e07050300ff0010ef"  # Green
+    },
+    "basketball": {
+        "uri": "spotify:playlist:2Qd1EZ4mInBWokQPJu08e4",
+        "hex": "7e070503ff8c0010ef"  # Basketball Orange
+    },
+    "brent and frank": {
+        "uri": "spotify:playlist:20N27XDYMAJ9YPNQKTfJyq",
+        "hex": "7e070503ff007f10ef"  # Pink
+    },
+    "summer": {
+        "uri": "spotify:playlist:2qGRLh923i3eV11NFy0LSl",
+        "hex": "7e070503ff450010ef"  # Sun Orange
+    },
+    "prince": {
+        "uri": "spotify:playlist:3ECu80LqexsohmZebvuBnR",
+        "hex": "7e07050380008010ef"  # Purple
+    },
+    "sade": {
+        "uri": "spotify:playlist:7F50uIOaxN6xz3VRJXCq1G",
+        "hex": "7e070503ffd70010ef"  # Silk Gold
     }
 }
 
