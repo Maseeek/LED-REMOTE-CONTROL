@@ -7,12 +7,16 @@ import asyncio
 from bleak import BleakClient
 import mss
 import pygetwindow as gw
+import queue
 
 app = Flask(__name__)
 
 # --- CONFIGURATION ---
 MAC_ADDR = "BE:37:FC:00:3C:49" 
 CHAR_UUID = "0000fff3-0000-1000-8000-00805f9b34fb"  
+
+# --- GLOBAL STATE ---
+color_queue = queue.Queue()
 
 # --- UPDATED CONFIGURATION ---
 PLAYLISTS = {
@@ -46,23 +50,41 @@ SONGS = {
 }
 # ---------------------
 
-# --- BLUETOOTH LOGIC ---
-async def set_led_color(hex_val):
-    try:
-        async with BleakClient(MAC_ADDR) as client:
-            await client.write_gatt_char(CHAR_UUID, bytes.fromhex(hex_val))
-            print(f"LEDs updated with hex: {hex_val}")
-    except Exception as e:
-        print(f"BLE Error: {e}")
-
-def run_ble_thread(hex_val):
-    # Running the async BLE call in a separate thread to prevent Flask blocking
+# --- BLUETOOTH PERSISTENT WORKER ---
+def ble_worker():
+    """Background thread that stays connected to the LEDs."""
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    try:
-        loop.run_until_complete(set_led_color(hex_val))
-    finally:
-        loop.close()
+    
+    async def run():
+        while True:
+            try:
+                print(f"Connecting to LEDs at {MAC_ADDR}...")
+                async with BleakClient(MAC_ADDR) as client:
+                    print("BLE Connected! Ready for instant updates.")
+                    while True:
+                        try:
+                            # Wait for a color update from the queue
+                            # Using a small timeout so we can check connection status
+                            hex_val = color_queue.get(timeout=1.0)
+                            
+                            if client.is_connected:
+                                # response=False makes the write much faster (no handshake)
+                                await client.write_gatt_char(CHAR_UUID, bytes.fromhex(hex_val), response=False)
+                                print(f"Instant BLE Update: {hex_val}")
+                            else:
+                                # Re-queue the color and reconnect
+                                color_queue.put(hex_val)
+                                break
+                        except queue.Empty:
+                            if not client.is_connected:
+                                break
+                            continue
+            except Exception as e:
+                print(f"BLE Worker Connection Error: {e}. Retrying in 5s...")
+                await asyncio.sleep(5)
+
+    loop.run_until_complete(run())
 
 def execute_playback(playlist_uri, is_song=False):
     print(f"Opening: {playlist_uri}")
@@ -166,9 +188,9 @@ def trigger_mood(name):
     if target:
         print(f"Received request for /{name}")
         
-        # 1. Update LEDs immediately in background
+        # 1. Queue LED update immediately (Instant!)
         led_hex = target["hex"]
-        threading.Thread(target=run_ble_thread, args=(led_hex,)).start()
+        color_queue.put(led_hex)
         
         # 2. Launch Spotify & Playback
         execute_playback(target["uri"], is_song=is_song)
@@ -177,6 +199,9 @@ def trigger_mood(name):
     return f"Mood '{name}' not found", 404
 
 if __name__ == '__main__':
+    # Start the persistent BLE worker in the background
+    threading.Thread(target=ble_worker, daemon=True).start()
+    
     print("Server starting on http://0.0.0.0:5000")
     print(f"Playlists: {list(PLAYLISTS.keys())}")
     print(f"Songs: {list(SONGS.keys())}")
