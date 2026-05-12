@@ -69,12 +69,13 @@ def execute_playback(playlist_uri, is_song=False):
         return False
 
     if is_song:
-        print("Song detected, focusing Spotify...")
+        print("Song detected, waiting 1.5s for page load...")
+        time.sleep(1.5) # Increased delay to ensure page is ready
         try:
             spotify_windows = [w for w in gw.getWindowsWithTitle('Spotify') if w.width > 200]
             if spotify_windows:
                 spotify_windows[0].activate()
-                time.sleep(0.5)
+                time.sleep(0.3)
         except: pass
         
         print("Pressing Enter...")
