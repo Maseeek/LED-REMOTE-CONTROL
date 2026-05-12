@@ -18,6 +18,7 @@ CHAR_UUID = "0000fff3-0000-1000-8000-00805f9b34fb"
 
 # --- GLOBAL STATE ---
 color_queue = queue.Queue()
+current_color_hex = "7e0705031db95410ef" # Default Spotify Green
 
 # --- UPDATED CONFIGURATION ---
 PLAYLISTS = {
@@ -109,11 +110,59 @@ def ble_worker():
 
 async def _async_execute_playback(playlist_uri, led_hex):
     print(f"Opening: {playlist_uri}")
+    
+    # 0. Force Pause first. If a song is already playing, we want it to stop
+    # so we don't accidentally sync LEDs to the OLD song's PLAYING status.
+    try:
+        sm = await GlobalSystemMediaTransportControlsSessionManager.request_async()
+        for s in sm.get_sessions():
+            if "Spotify" in s.source_app_user_model_id:
+                await s.try_pause_async()
+                break
+    except: pass
+
+    # 1. Open the URI (this forces Spotify to the front)
     os.system(f"start {playlist_uri}")
     
-    # Give Spotify a moment to process the URI
-    await asyncio.sleep(1.0)
+    # 2. Give Spotify a moment to load the page and become the active window
+    await asyncio.sleep(1.5)
     
+    # 3. Hybrid approach: Scan the Active Window for the green Play button
+    def click_play_button():
+        try:
+            # Since 'start' brings Spotify to the front, it should be the active window
+            win = gw.getActiveWindow()
+            if not win:
+                return False
+                
+            search_region = {"top": win.top, "left": win.left, "width": win.width, "height": win.height}
+            
+            with mss.mss() as sct:
+                screenshot = sct.grab(search_region)
+                width, height = screenshot.width, screenshot.height
+                max_y = int(height * 0.6) # Play button is usually in the top half
+                
+                # Scan for Spotify Green
+                for x in range(0, width, 10):
+                    for y in range(0, max_y, 10):
+                        b, g, r = screenshot.pixel(x, y)
+                        if g > 185 and r < 100 and b < 150 and g > r + 80:
+                            screen_x = search_region["left"] + x
+                            screen_y = search_region["top"] + y
+                            print(f"Found Play Button at {screen_x}, {screen_y}. Clicking...")
+                            pyautogui.click(screen_x, screen_y, duration=0.1)
+                            return True
+            return False
+        except Exception as e:
+            print(f"Play button scan failed: {e}")
+            return False
+
+    clicked = click_play_button()
+    if not clicked:
+        print("Could not find green play button. Trying Enter key fallback...")
+        pyautogui.press('enter')
+    
+    # 4. Use Windows Media Controls to guarantee perfect LED sync
     try:
         sessions_manager = await GlobalSystemMediaTransportControlsSessionManager.request_async()
     except Exception as e:
@@ -121,24 +170,23 @@ async def _async_execute_playback(playlist_uri, led_hex):
         color_queue.put(led_hex)
         return False
     
-    # Wait for playback to actually start, force it if needed
-    for attempt in range(15): # 15 attempts * 0.4s = 6 seconds max
-        session = sessions_manager.get_current_session()
+    for attempt in range(12): # 12 attempts * 0.5s = 6 seconds max
+        sessions = sessions_manager.get_sessions()
+        session = next((s for s in sessions if "Spotify" in s.source_app_user_model_id), None)
+        
         if session:
             playback_info = session.get_playback_info()
             if playback_info and playback_info.playback_status == GlobalSystemMediaTransportControlsSessionPlaybackStatus.PLAYING:
-                print("Successfully playing! Syncing LEDs precisely now...")
+                print("Confirmed: OS reports song is playing. Syncing LEDs now.")
                 color_queue.put(led_hex)
                 return True
                 
-            print("Not playing yet. Forcing play command...")
+            print("OS reports not playing yet. Forcing play command...")
             await session.try_play_async()
-            # If we sent play, wait a tiny bit longer before checking again
-            await asyncio.sleep(0.2)
             
-        await asyncio.sleep(0.4)
+        await asyncio.sleep(0.5)
         
-    print("Failed to verify playback start. Falling back to immediate LED sync.")
+    print("Warning: Could not confirm playback via OS, syncing LEDs anyway.")
     color_queue.put(led_hex)
     return False
 
@@ -166,11 +214,12 @@ async def _async_get_spotify_status():
             
             return {
                 "playing": is_playing,
-                "title": title if is_playing else "Paused"
+                "title": title if is_playing else "Paused",
+                "color": current_color_hex
             }
     except Exception as e:
         print(f"Status error: {e}")
-    return {"playing": False, "title": "Spotify Closed"}
+    return {"playing": False, "title": "Spotify Closed", "color": current_color_hex}
 
 def get_spotify_status():
     """Check playback via Windows Media Controls for 100% accuracy."""

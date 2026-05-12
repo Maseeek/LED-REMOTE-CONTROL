@@ -3,242 +3,417 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>LED Remote Control</title>
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600&display=swap" rel="stylesheet">
+    <title>Lumina | LED Control Center</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #0a0a0c;
-            --card-bg: #16161a;
-            --text: #f0f0f0;
-            --text-dim: #a0a0a0;
-            --accent: #1db954; /* Spotify Green */
+            --bg: #050505;
+            --card-bg: rgba(255, 255, 255, 0.03);
+            --card-border: rgba(255, 255, 255, 0.1);
+            --text: #ffffff;
+            --text-dim: #a1a1aa;
+            --accent: #1db954;
+            --font: 'Outfit', sans-serif;
+            --glass: rgba(20, 20, 20, 0.7);
         }
 
         * {
             box-sizing: border-box;
             margin: 0;
             padding: 0;
+            -webkit-tap-highlight-color: transparent;
         }
 
         body {
-            font-family: 'Outfit', sans-serif;
+            font-family: var(--font);
             background-color: var(--bg);
             color: var(--text);
+            min-height: 100vh;
+            overflow-x: hidden;
             display: flex;
             flex-direction: column;
             align-items: center;
-            min-height: 100vh;
-            padding: 2rem 1rem;
+            padding-bottom: 120px; /* Space for now playing bar */
         }
 
+        /* Animated Background */
+        .bg-blobs {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+            filter: blur(80px);
+            opacity: 0.4;
+        }
+
+        .blob {
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            border-radius: 50%;
+            background: var(--accent);
+            animation: move 20s infinite alternate;
+        }
+
+        .blob-1 {
+            top: -100px;
+            left: -100px;
+            background: #1db954;
+            animation-duration: 25s;
+        }
+
+        .blob-2 {
+            bottom: -100px;
+            right: -100px;
+            background: #4c1d95;
+            animation-duration: 30s;
+            animation-delay: -5s;
+        }
+
+        .blob-3 {
+            top: 40%;
+            left: 50%;
+            width: 300px;
+            height: 300px;
+            background: #0ea5e9;
+            animation-duration: 20s;
+            animation-delay: -10s;
+        }
+
+        @keyframes move {
+            from { transform: translate(0, 0) scale(1); }
+            to { transform: translate(100px, 100px) scale(1.2); }
+        }
+
+        /* Header */
         header {
+            width: 100%;
+            padding: 4rem 2rem 2rem;
             text-align: center;
-            margin-bottom: 3rem;
+            max-width: 1200px;
         }
 
         h1 {
-            font-size: 2.5rem;
-            font-weight: 600;
+            font-size: 3.5rem;
+            font-weight: 700;
+            letter-spacing: -2px;
             margin-bottom: 0.5rem;
-            background: linear-gradient(90deg, #fff, var(--accent));
+            background: linear-gradient(180deg, #fff 0%, #aaa 100%);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
 
-        p {
+        header p {
+            font-size: 1.1rem;
             color: var(--text-dim);
             font-weight: 300;
+            letter-spacing: 2px;
+            text-transform: uppercase;
         }
 
+        /* Container */
         .container {
             width: 100%;
-            max-width: 1000px;
+            max-width: 1200px;
+            padding: 0 1.5rem;
         }
 
         section {
-            margin-bottom: 3rem;
+            margin-bottom: 4rem;
         }
 
-        h2 {
-            font-size: 1.2rem;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            margin-bottom: 1.5rem;
-            color: var(--text-dim);
-            border-left: 3px solid var(--accent);
-            padding-left: 1rem;
+        .section-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 2rem;
         }
 
+        .section-header h2 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            letter-spacing: -0.5px;
+        }
+
+        .section-header .line {
+            flex-grow: 1;
+            height: 1px;
+            background: linear-gradient(90deg, var(--card-border), transparent);
+        }
+
+        /* Grid */
         .grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
             gap: 1.5rem;
         }
 
+        /* Cards */
         .card {
-            background: var(--card-bg);
-            border-radius: 16px;
-            padding: 1.5rem;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-            border: 1px solid rgba(255, 255, 255, 0.05);
             position: relative;
+            background: var(--card-bg);
+            border: 1px solid var(--card-border);
+            border-radius: 24px;
+            padding: 2rem;
+            cursor: pointer;
+            transition: all 0.4s cubic-bezier(0.2, 0, 0.2, 1);
             overflow: hidden;
             display: flex;
             flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            min-height: 140px;
+            gap: 1rem;
+            backdrop-filter: blur(10px);
         }
 
         .card:hover {
-            transform: translateY(-5px);
-            background: #1c1c22;
-            border-color: rgba(255, 255, 255, 0.1);
+            transform: translateY(-8px) scale(1.02);
+            border-color: rgba(255, 255, 255, 0.3);
+            background: rgba(255, 255, 255, 0.05);
+            box-shadow: 0 20px 40px -20px rgba(0, 0, 0, 0.5);
         }
 
         .card:active {
-            transform: scale(0.95);
+            transform: scale(0.98);
+        }
+
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 0.5rem;
+            transition: all 0.3s ease;
+        }
+
+        .card:hover .card-icon {
+            transform: rotate(5deg) scale(1.1);
         }
 
         .card h3 {
-            font-size: 1.25rem;
+            font-size: 1.4rem;
+            font-weight: 600;
             text-transform: capitalize;
-            margin-bottom: 0.25rem;
-            z-index: 2;
+            z-index: 1;
         }
 
         .card .type {
-            font-size: 0.75rem;
+            font-size: 0.8rem;
             color: var(--text-dim);
             text-transform: uppercase;
             letter-spacing: 1px;
-            z-index: 2;
+            font-weight: 600;
         }
 
-        .glow {
+        .card-glow {
             position: absolute;
             top: 0;
             left: 0;
             width: 100%;
             height: 100%;
-            opacity: 0.1;
-            transition: opacity 0.3s ease;
-            z-index: 1;
-        }
-
-        .card:hover .glow {
-            opacity: 0.3;
-        }
-
-        /* Status Indicator */
-        #status {
-            position: fixed;
-            bottom: 2rem;
-            padding: 1rem 2rem;
-            border-radius: 50px;
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(10px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            font-size: 0.9rem;
             opacity: 0;
-            transition: opacity 0.3s ease;
+            transition: opacity 0.4s ease;
             pointer-events: none;
-            z-index: 100;
+            z-index: 0;
         }
 
-        # now-playing {
+        .card:hover .card-glow {
+            opacity: 0.15;
+        }
+
+        /* Now Playing Bar */
+        #now-playing {
             position: fixed;
-            top: 0;
+            bottom: 0;
             left: 0;
             width: 100%;
-            background: rgba(29, 185, 84, 0.1);
-            backdrop-filter: blur(10px);
-            border-bottom: 1px solid rgba(29, 185, 84, 0.3);
-            padding: 0.75rem;
-            text-align: center;
-            font-size: 0.85rem;
-            color: var(--accent);
+            padding: 1.5rem 2rem;
+            background: var(--glass);
+            backdrop-filter: blur(20px);
+            border-top: 1px solid var(--card-border);
             display: flex;
             align-items: center;
             justify-content: center;
-            gap: 10px;
             z-index: 1000;
             transition: all 0.5s ease;
         }
 
-        # now-playing .dot {
-            width: 8px;
-            height: 8px;
+        .now-playing-content {
+            display: flex;
+            align-items: center;
+            gap: 1.5rem;
+            max-width: 1200px;
+            width: 100%;
+        }
+
+        .status-dot-container {
+            position: relative;
+            width: 12px;
+            height: 12px;
+        }
+
+        .status-dot {
+            width: 100%;
+            height: 100%;
             background: var(--accent);
             border-radius: 50%;
-            box-shadow: 0 0 10px var(--accent);
+            box-shadow: 0 0 15px var(--accent);
         }
 
-        # now-playing.paused {
+        .status-pulse {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--accent);
+            border-radius: 50%;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); opacity: 0.8; }
+            100% { transform: scale(3); opacity: 0; }
+        }
+
+        .track-info {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .track-label {
+            font-size: 0.7rem;
             color: var(--text-dim);
-            border-bottom-color: rgba(255,255,255,0.1);
-            background: rgba(0,0,0,0.5);
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 700;
         }
 
-        # now-playing.paused .dot {
-            background: var(--text-dim);
+        #track-name {
+            font-size: 1.1rem;
+            font-weight: 600;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        #now-playing.paused .status-dot {
+            background: #444;
             box-shadow: none;
         }
 
-        /* Adjust main padding for the header */
-        body {
-            padding-top: 4rem;
+        #now-playing.paused .status-pulse {
+            display: none;
         }
 
-        #status.visible {
-            opacity: 1;
+        /* Status Toast */
+        #status-toast {
+            position: fixed;
+            top: 2rem;
+            right: 2rem;
+            padding: 1rem 1.5rem;
+            background: #fff;
+            color: #000;
+            border-radius: 12px;
+            font-weight: 600;
+            transform: translateX(200%);
+            transition: transform 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 2000;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
         }
 
+        #status-toast.visible {
+            transform: translateX(0);
+        }
+
+        /* Mobile Adjustments */
         @media (max-width: 600px) {
-            .grid {
-                grid-template-columns: 1fr 1fr;
-            }
+            h1 { font-size: 2.5rem; }
+            .grid { grid-template-columns: 1fr 1fr; gap: 1rem; }
+            .card { padding: 1.25rem; border-radius: 20px; }
+            .card h3 { font-size: 1.1rem; }
+            .now-playing-content { gap: 1rem; }
+        }
+
+        /* Icon Styles */
+        svg {
+            width: 24px;
+            height: 24px;
+            stroke: currentColor;
+            fill: none;
+            stroke-width: 2;
+            stroke-linecap: round;
+            stroke-linejoin: round;
         }
     </style>
 </head>
 <body>
 
-    <div id="now-playing" class="paused">
-        <div class="dot"></div>
-        <span id="track-name">Spotify Stopped</span>
+    <div class="bg-blobs">
+        <div class="blob blob-1"></div>
+        <div class="blob blob-2"></div>
+        <div class="blob blob-3"></div>
+    </div>
+
+    <div id="status-toast">
+        <svg viewBox="0 0 24 24"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+        <span id="toast-msg">Updated</span>
     </div>
 
     <header>
-        <h1>Remote Control</h1>
-        <p>Atmosphere & Music Sync</p>
+        <h1>Lumina</h1>
+        <p>Atmosphere Control</p>
     </header>
 
     <div class="container">
         <section>
-            <h2>Playlists</h2>
-            <div id="playlist-grid" class="grid">
-                <!-- Injected via JS -->
+            <div class="section-header">
+                <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>
+                <h2>Playlists</h2>
+                <div class="line"></div>
             </div>
+            <div id="playlist-grid" class="grid"></div>
         </section>
 
         <section>
-            <h2>Songs</h2>
-            <div id="song-grid" class="grid">
-                <!-- Injected via JS -->
+            <div class="section-header">
+                <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"></circle><path d="M10 8l6 4-6 4V8z"></path></svg>
+                <h2>Tracks</h2>
+                <div class="line"></div>
             </div>
+            <div id="song-grid" class="grid"></div>
         </section>
     </div>
 
-    <div id="status">Updating Atmosphere...</div>
+    <div id="now-playing" class="paused">
+        <div class="now-playing-content">
+            <div class="status-dot-container">
+                <div class="status-pulse"></div>
+                <div class="status-dot"></div>
+            </div>
+            <div class="track-info">
+                <span class="track-label">Now Playing</span>
+                <span id="track-name">Spotify Offline</span>
+            </div>
+            <svg id="playback-icon" viewBox="0 0 24 24"><rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect></svg>
+        </div>
+    </div>
 
     <script>
-        // Use the colors from your Python config to create the UI
         const playlists = {{ playlists | tojson }};
         const songs = {{ songs | tojson }};
 
         function hexToRgba(hex, alpha = 1) {
+            // Extract RGB from 7e070503RRGGBB10ef
             let r = parseInt(hex.slice(8, 10), 16) || 255;
             let g = parseInt(hex.slice(10, 12), 16) || 255;
             let b = parseInt(hex.slice(12, 14), 16) || 255;
@@ -249,72 +424,93 @@
             const card = document.createElement('div');
             card.className = 'card';
             const color = hexToRgba(data.hex);
+            const lightColor = hexToRgba(data.hex, 0.2);
             
             card.innerHTML = `
-                <div class="glow" style="background: radial-gradient(circle, ${color} 0%, transparent 70%);"></div>
-                <h3 style="color: ${color}">${name}</h3>
-                <span class="type">${type}</span>
+                <div class="card-glow" style="background: radial-gradient(circle at center, ${color} 0%, transparent 70%);"></div>
+                <div class="card-icon" style="color: ${color}; background: ${lightColor};">
+                    ${type === 'Playlist' ? 
+                        '<svg viewBox="0 0 24 24"><path d="M9 18V5l12-2v13"></path><circle cx="6" cy="18" r="3"></circle><circle cx="18" cy="16" r="3"></circle></svg>' : 
+                        '<svg viewBox="0 0 24 24"><path d="M3 18v-6a9 9 0 0 1 18 0v6"></path><path d="M21 19a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3zM3 19a2 2 0 0 0 2 2h1a2 2 0 0 0 2-2v-3a2 2 0 0 0-2-2H3z"></path></svg>'
+                    }
+                </div>
+                <div style="z-index: 1;">
+                    <span class="type">${type}</span>
+                    <h3 style="color: #fff">${name}</h3>
+                </div>
             `;
 
-            card.style.boxShadow = `0 4px 20px -5px ${hexToRgba(data.hex, 0.2)}`;
+            card.style.borderColor = hexToRgba(data.hex, 0.15);
             
             card.onclick = async () => {
-                showStatus(`Activating ${name}...`);
+                showToast(`Activating ${name}...`);
+                card.style.transform = 'scale(0.95)';
+                setTimeout(() => card.style.transform = '', 100);
+                
                 try {
                     const response = await fetch(`/${name}`);
                     if (response.ok) {
-                        showStatus(`Started ${name}`);
-                    } else {
-                        showStatus(`Error triggering ${name}`);
+                        showToast(`Atmosphere: ${name}`);
+                        // Update background blob color to match
+                        document.querySelector('.blob-1').style.background = color;
                     }
                 } catch (err) {
-                    showStatus('Connection Error');
+                    showToast('Connection Lost');
                 }
             };
 
             return card;
         }
 
-        function showStatus(msg) {
-            const status = document.getElementById('status');
-            status.innerText = msg;
-            status.classList.add('visible');
-            setTimeout(() => status.classList.remove('visible'), 3000);
+        function showToast(msg) {
+            const toast = document.getElementById('status-toast');
+            const msgSpan = document.getElementById('toast-msg');
+            msgSpan.innerText = msg;
+            toast.classList.add('visible');
+            setTimeout(() => toast.classList.remove('visible'), 3000);
         }
 
-        // Initialize grids
+        // Grids
         const pGrid = document.getElementById('playlist-grid');
-        Object.entries(playlists).forEach(([name, data]) => {
-            pGrid.appendChild(createCard(name, data, 'Playlist'));
-        });
+        Object.entries(playlists).forEach(([name, data]) => pGrid.appendChild(createCard(name, data, 'Playlist')));
 
         const sGrid = document.getElementById('song-grid');
-        Object.entries(songs).forEach(([name, data]) => {
-            sGrid.appendChild(createCard(name, data, 'Track'));
-        });
-        // Polling for playback status
-        async function updatePlaybackStatus() {
+        Object.entries(songs).forEach(([name, data]) => sGrid.appendChild(createCard(name, data, 'Track')));
+
+        // Status Polling
+        async function updateStatus() {
             try {
                 const response = await fetch('/status');
                 const data = await response.json();
                 
                 const np = document.getElementById('now-playing');
                 const track = document.getElementById('track-name');
+                const icon = document.getElementById('playback-icon');
                 
                 track.innerText = data.title;
                 
+                if (data.color) {
+                    const activeColor = hexToRgba(data.color);
+                    document.querySelector('.blob-1').style.background = activeColor;
+                    document.querySelector('.status-dot').style.background = activeColor;
+                    document.querySelector('.status-dot').style.boxShadow = `0 0 15px ${activeColor}`;
+                    document.querySelector('.status-pulse').style.background = activeColor;
+                }
+
                 if (data.playing) {
                     np.classList.remove('paused');
+                    icon.innerHTML = '<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>';
                 } else {
                     np.classList.add('paused');
+                    icon.innerHTML = '<path d="M5 3l14 9-14 9V3z"></path>';
                 }
             } catch (err) {
-                console.error("Status poll failed", err);
+                console.error("Poll failed", err);
             }
         }
 
-        setInterval(updatePlaybackStatus, 2000);
-        updatePlaybackStatus();
+        setInterval(updateStatus, 2000);
+        updateStatus();
     </script>
 </body>
 </html>
