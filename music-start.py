@@ -5,7 +5,8 @@ import pyautogui
 import threading
 import asyncio
 from bleak import BleakClient
-from mss import mss
+import mss
+import pygetwindow as gw
 
 app = Flask(__name__)
 
@@ -32,6 +33,13 @@ PLAYLISTS = {
         "hex": "7e07050300ff0010ef"  # Green
     }
 }
+
+SONGS = {
+    "sex": {
+        "uri": "spotify:track:5WDLRQ3VCdVrKw0njWe5E5", # Example song
+        "hex": "7e070503ff000010ef"  # red
+    }
+}
 # ---------------------
 
 # --- BLUETOOTH LOGIC ---
@@ -52,83 +60,94 @@ def run_ble_thread(hex_val):
     finally:
         loop.close()
 
-def execute_playback(playlist_uri):
-    print(f"Opening playlist: {playlist_uri}")
+def execute_playback(playlist_uri, is_song=False):
+    print(f"Opening: {playlist_uri}")
     result = os.system(f"start {playlist_uri}")
     
     if result != 0:
         print(f"Failed to execute start command. Error code: {result}")
         return False
 
+    if is_song:
+        print("Song detected, waiting 1s and pressing Enter...")
+        time.sleep(1.5)
+        pyautogui.press('enter')
+        return True
+
     def find_and_click_play():
         try:
-            with mss() as sct:
-                monitor = sct.monitors[0]
-                screenshot = sct.grab(monitor)
+            # 1. Try to find the Spotify window to narrow down the search area
+            spotify_windows = [w for w in gw.getWindowsWithTitle('Spotify') if w.visible and w.width > 200]
+            search_region = None
+            
+            with mss.mss() as sct:
+                if spotify_windows:
+                    win = spotify_windows[0]
+                    search_region = {"top": win.top, "left": win.left, "width": win.width, "height": win.height}
+                else:
+                    search_region = sct.monitors[0] # Fallback to all monitors
+                
+                screenshot = sct.grab(search_region)
                 width, height = screenshot.width, screenshot.height
                 
-                for x in range(50, width - 50, 15): # Slightly finer scan
-                    for y in range(50, height - 50, 15):
+                # OPTIMIZATION: Only scan the top 60% of the window
+                max_y = int(height * 0.6)
+                
+                # Scan with a 10px step for maximum precision
+                for x in range(0, width, 10):
+                    for y in range(0, max_y, 10):
                         b, g, r = screenshot.pixel(x, y)
                         
-                        # Is it Spotify Green?
-                        if g > 180 and r < 100 and b < 150 and g > r + 80:
-                            # 1. VERIFY SIZE: Check a wider area (15px away)
-                            b2, g2, r2 = screenshot.pixel(x + 15, y + 15)
-                            if g2 > 180 and r2 < 100 and b2 < 150:
-                                
-                                # 2. TRIANGLE CHECK: Look for black inside (the play icon)
-                                # The heart icon is solid green, the Play button has a black center
-                                found_black = False
-                                for dx in range(-20, 20, 5):
-                                    for dy in range(-20, 20, 5):
-                                        bx, gx, rx = screenshot.pixel(x + dx, y + dy)
-                                        if rx < 40 and gx < 40 and bx < 40: # Black/Dark Gray
-                                            found_black = True
-                                            break
-                                    if found_black: break
-                                
-                                if found_black:
-                                    screen_x = monitor["left"] + x
-                                    screen_y = monitor["top"] + y
-                                    print(f"Confirmed Play button (with triangle) at {screen_x}, {screen_y}")
-                                    pyautogui.click(screen_x, screen_y)
-                                    return True
+                        # Robust Spotify Green Check
+                        if g > 185 and r < 100 and b < 150 and g > r + 80:
+                            screen_x = search_region["left"] + x
+                            screen_y = search_region["top"] + y
+                            print(f"Fast Match! Play Button at {screen_x}, {screen_y}")
+                            pyautogui.click(screen_x, screen_y)
+                            return True
                 return False
         except Exception as e:
-            print(f"Error during search: {e}")
+            print(f"Scan error: {e}")
             return False
 
-    # Optimized Playback logic: Poll frequently for the play button
-    print("Scanning for Spotify Play button (polling for 8s)...")
-    
-    # Try immediately, then loop
-    for attempt in range(16): # 16 attempts * 0.5s = 8 seconds total
+    # Extreme Polling: 0.1s interval for maximum speed
+    print("Fast Scanning for Play button...")
+    for attempt in range(60): # 60 attempts * 0.1s = 6 seconds total
         if find_and_click_play():
-            print(f"Play button clicked on attempt {attempt + 1}")
             return True
-        time.sleep(0.5) # Check every 500ms for responsiveness
+        time.sleep(0.1) 
         
-    print("Play button not found, falling back to Alt+Shift+P...")
+    print("Falling back to Alt+Shift+P...")
     pyautogui.hotkey('alt', 'shift', 'p')
     return True
 
-@app.route('/<mood>', methods=['GET'])
-def trigger_playlist(mood):
-    if mood in PLAYLISTS:
-        print(f"Received request for /{mood}")
+@app.route('/<name>', methods=['GET'])
+def trigger_mood(name):
+    # Check if it's a playlist or a song
+    target = None
+    is_song = False
+    
+    if name in PLAYLISTS:
+        target = PLAYLISTS[name]
+    elif name in SONGS:
+        target = SONGS[name]
+        is_song = True
+        
+    if target:
+        print(f"Received request for /{name}")
         
         # 1. Update LEDs immediately in background
-        led_hex = PLAYLISTS[mood]["hex"]
+        led_hex = target["hex"]
         threading.Thread(target=run_ble_thread, args=(led_hex,)).start()
         
         # 2. Launch Spotify & Playback
-        execute_playback(PLAYLISTS[mood]["uri"])
+        execute_playback(target["uri"], is_song=is_song)
         
-        return f"Started {mood} music and updated LEDs", 200
-    return "Playlist not found", 404
+        return f"Started {name} and updated LEDs", 200
+    return f"Mood '{name}' not found", 404
 
 if __name__ == '__main__':
     print("Server starting on http://0.0.0.0:5000")
-    print(f"Available endpoints: {list(PLAYLISTS.keys())}")
+    print(f"Playlists: {list(PLAYLISTS.keys())}")
+    print(f"Songs: {list(SONGS.keys())}")
     app.run(host='0.0.0.0', port=5000)
