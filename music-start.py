@@ -38,6 +38,10 @@ SONGS = {
     "sex": {
         "uri": "spotify:track:5WDLRQ3VCdVrKw0njWe5E5", # Example song
         "hex": "7e070503ff000010ef"  # red
+    },
+    "jarvis":{
+        "uri": "spotify:track:39shmbIHICJ2Wxnk1fPSdz",
+        "hex": "7e0705030000ff10ef" # deep blue
     }
 }
 # ---------------------
