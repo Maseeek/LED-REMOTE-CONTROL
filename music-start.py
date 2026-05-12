@@ -1,9 +1,11 @@
+from flask import Flask
 import os
 import time
 import pyautogui
 import threading
 import asyncio
 from bleak import BleakClient
+from mss import mss
 
 app = Flask(__name__)
 
@@ -60,15 +62,13 @@ def execute_playback(playlist_uri):
 
     def find_and_click_play():
         try:
-            import pyautogui
-            from mss import mss
             with mss() as sct:
                 monitor = sct.monitors[0]
                 screenshot = sct.grab(monitor)
                 width, height = screenshot.width, screenshot.height
                 
-                for x in range(50, width - 50, 20): # Faster scan
-                    for y in range(50, height - 50, 20):
+                for x in range(50, width - 50, 15): # Slightly finer scan
+                    for y in range(50, height - 50, 15):
                         b, g, r = screenshot.pixel(x, y)
                         
                         # Is it Spotify Green?
@@ -99,15 +99,18 @@ def execute_playback(playlist_uri):
             print(f"Error during search: {e}")
             return False
 
-    # Attempt playback logic
-    print("Checking if Spotify is already open (Attempt 1)...")
-    time.sleep(2)
-    if not find_and_click_play():
-        print("Waiting for load (Attempt 2)...")
-        time.sleep(4)
-        if not find_and_click_play():
-            print("Falling back to Alt+Shift+P...")
-            pyautogui.hotkey('alt', 'shift', 'p')
+    # Optimized Playback logic: Poll frequently for the play button
+    print("Scanning for Spotify Play button (polling for 8s)...")
+    
+    # Try immediately, then loop
+    for attempt in range(16): # 16 attempts * 0.5s = 8 seconds total
+        if find_and_click_play():
+            print(f"Play button clicked on attempt {attempt + 1}")
+            return True
+        time.sleep(0.5) # Check every 500ms for responsiveness
+        
+    print("Play button not found, falling back to Alt+Shift+P...")
+    pyautogui.hotkey('alt', 'shift', 'p')
     return True
 
 @app.route('/<mood>', methods=['GET'])
