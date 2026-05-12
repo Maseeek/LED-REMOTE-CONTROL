@@ -8,6 +8,7 @@ from bleak import BleakClient
 import mss
 import pygetwindow as gw
 import queue
+from winrt.windows.media.control import GlobalSystemMediaTransportControlsSessionManager, GlobalSystemMediaTransportControlsSessionPlaybackStatus
 
 app = Flask(__name__)
 
@@ -106,101 +107,82 @@ def ble_worker():
 
     loop.run_until_complete(run())
 
-def execute_playback(playlist_uri, led_hex, is_song=False):
+async def _async_execute_playback(playlist_uri, led_hex):
     print(f"Opening: {playlist_uri}")
-    result = os.system(f"start {playlist_uri}")
+    os.system(f"start {playlist_uri}")
     
-    if result != 0:
-        print(f"Failed to execute start command. Error code: {result}")
-        return False
-
-    if is_song:
-        print("Song detected, waiting 1.5s for page load...")
-        time.sleep(1.5) # Increased delay to ensure page is ready
-        try:
-            spotify_windows = [w for w in gw.getWindowsWithTitle('Spotify') if w.width > 200]
-            if spotify_windows:
-                spotify_windows[0].activate()
-                time.sleep(0.3)
-        except: pass
-        
-        print("Pressing Enter...")
-        pyautogui.press('enter')
-        
-        # Sync LEDs with track start
-        color_queue.put(led_hex)
-        return True
-
-    def find_and_click_play():
-        try:
-            # 1. Try to find the Spotify window to narrow down the search area
-            spotify_windows = [w for w in gw.getWindowsWithTitle('Spotify') if w.visible and w.width > 200]
-            search_region = None
-            
-            with mss.mss() as sct:
-                if spotify_windows:
-                    win = spotify_windows[0]
-                    search_region = {"top": win.top, "left": win.left, "width": win.width, "height": win.height}
-                else:
-                    search_region = sct.monitors[0] # Fallback to all monitors
-                
-                screenshot = sct.grab(search_region)
-                width, height = screenshot.width, screenshot.height
-                
-                # OPTIMIZATION: Only scan the top 60% of the window
-                max_y = int(height * 0.6)
-                
-                # Scan with a 10px step for maximum precision
-                for x in range(0, width, 10):
-                    for y in range(0, max_y, 10):
-                        b, g, r = screenshot.pixel(x, y)
-                        
-                        # Robust Spotify Green Check
-                        if g > 185 and r < 100 and b < 150 and g > r + 80:
-                            screen_x = search_region["left"] + x
-                            screen_y = search_region["top"] + y
-                            print(f"Fast Match! Play Button at {screen_x}, {screen_y}")
-                            
-                            # Force focus before clicking
-                            try:
-                                if spotify_windows:
-                                    spotify_windows[0].activate()
-                                    time.sleep(0.5) # Increased for stability
-                            except: pass
-                            
-                            # Slower click duration helps Spotify register the input
-                            pyautogui.click(screen_x, screen_y, duration=0.1)
-                            
-                            # Sync LEDs with playlist start
-                            color_queue.put(led_hex)
-                            return True
-                return False
-        except Exception as e:
-            print(f"Scan error: {e}")
-            return False
-
-    # Wait a moment for the window to actually open before scanning
-    time.sleep(1.0)
+    # Give Spotify a moment to process the URI
+    await asyncio.sleep(1.0)
     
-    # Extreme Polling: 0.1s interval for maximum speed
-    print("Fast Scanning for Play button...")
-    for attempt in range(60): # 60 attempts * 0.1s = 6 seconds total
-        if find_and_click_play():
-            return True
-        time.sleep(0.1) 
-        
-    print("Falling back to Alt+Shift+P...")
     try:
-        spotify_windows = [w for w in gw.getWindowsWithTitle('Spotify') if w.width > 200]
-        if spotify_windows:
-            spotify_windows[0].activate()
-            time.sleep(0.3)
-    except: pass
-    pyautogui.hotkey('alt', 'shift', 'p')
+        sessions_manager = await GlobalSystemMediaTransportControlsSessionManager.request_async()
+    except Exception as e:
+        print(f"Failed to get session manager: {e}")
+        color_queue.put(led_hex)
+        return False
     
-    # Sync LEDs with fallback play
+    # Wait for playback to actually start, force it if needed
+    for attempt in range(15): # 15 attempts * 0.4s = 6 seconds max
+        session = sessions_manager.get_current_session()
+        if session:
+            playback_info = session.get_playback_info()
+            if playback_info and playback_info.playback_status == GlobalSystemMediaTransportControlsSessionPlaybackStatus.PLAYING:
+                print("Successfully playing! Syncing LEDs precisely now...")
+                color_queue.put(led_hex)
+                return True
+                
+            print("Not playing yet. Forcing play command...")
+            await session.try_play_async()
+            # If we sent play, wait a tiny bit longer before checking again
+            await asyncio.sleep(0.2)
+            
+        await asyncio.sleep(0.4)
+        
+    print("Failed to verify playback start. Falling back to immediate LED sync.")
     color_queue.put(led_hex)
-    return True
+    return False
+
+def execute_playback(playlist_uri, led_hex, is_song=False):
+    # Run the async playback logic in a new event loop
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    result = loop.run_until_complete(_async_execute_playback(playlist_uri, led_hex))
+    loop.close()
+    return result
+
+async def _async_get_spotify_status():
+    try:
+        sessions_manager = await GlobalSystemMediaTransportControlsSessionManager.request_async()
+        session = sessions_manager.get_current_session()
+        if session:
+            playback_info = session.get_playback_info()
+            is_playing = playback_info and playback_info.playback_status == GlobalSystemMediaTransportControlsSessionPlaybackStatus.PLAYING
+            
+            media_props = await session.try_get_media_properties_async()
+            if media_props and media_props.title:
+                title = f"{media_props.artist} - {media_props.title}" if media_props.artist else media_props.title
+            else:
+                title = "Unknown"
+            
+            return {
+                "playing": is_playing,
+                "title": title if is_playing else "Paused"
+            }
+    except Exception as e:
+        print(f"Status error: {e}")
+    return {"playing": False, "title": "Spotify Closed"}
+
+def get_spotify_status():
+    """Check playback via Windows Media Controls for 100% accuracy."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    result = loop.run_until_complete(_async_get_spotify_status())
+    loop.close()
+    return result
+
+@app.route('/status', methods=['GET'])
+def playback_status():
+    return get_spotify_status()
 
 @app.route('/', methods=['GET'])
 def index():
