@@ -1,6 +1,11 @@
 from flask import Flask, render_template, request, jsonify
 import database
 import os
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
+
 import time
 import pyautogui
 import threading
@@ -14,8 +19,9 @@ from winrt.windows.media.control import GlobalSystemMediaTransportControlsSessio
 app = Flask(__name__)
 
 # --- CONFIGURATION ---
-MAC_ADDR = "BE:37:FC:00:3C:49" 
-CHAR_UUID = "0000fff3-0000-1000-8000-00805f9b34fb"  
+MAC_ADDR = os.getenv("LED_MAC_ADDR", "XX:XX:XX:XX:XX:XX")
+CHAR_UUID = os.getenv("LED_CHAR_UUID", "0000fff3-0000-1000-8000-00805f9b34fb")
+
 
 # --- GLOBAL STATE ---
 color_queue = queue.Queue()
@@ -87,14 +93,15 @@ PLAYLISTS = {
 
 SONGS = {
     "oooo la la": {
-        "uri": "spotify:track:5WDLRQ3VCdVrKw0njWe5E5", # Example song
-        "hex": "7e070503ff000010ef"  # red
+        "uri": "spotify:track:5WDLRQ3VCdVrKw0njWe5E5",
+        "hex": "7e070503ff000010ef"
     },
-    "jarvis":{
+    "jarvis": {
         "uri": "spotify:track:39shmbIHICJ2Wxnk1fPSdz",
-        "hex": "7e0705030000ff10ef" # deep blue
+        "hex": "7e0705030000ff10ef"
     }
 }
+
 # --- DATABASE INITIALIZATION ---
 # Seed the DB with current hardcoded values if it doesn't exist
 database.init_db(PLAYLISTS, SONGS)
@@ -419,7 +426,8 @@ if __name__ == '__main__':
     # Start the persistent BLE worker in the background
     threading.Thread(target=ble_worker, daemon=True).start()
     
-    print("Server starting on http://0.0.0.0:5000")
-    print(f"Playlists: {list(PLAYLISTS.keys())}")
-    print(f"Songs: {list(SONGS.keys())}")
-    app.run(host='0.0.0.0', port=5000)
+    host = os.getenv("FLASK_HOST", "0.0.0.0")
+    port = int(os.getenv("FLASK_PORT", 5000))
+    print(f"Server starting on http://{host}:{port}")
+    app.run(host=host, port=port)
+
