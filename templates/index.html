@@ -750,6 +750,56 @@
             transform: translateY(-2px);
             filter: brightness(1.1);
         }
+
+        /* Sync Toggle */
+        .sync-toggle-group {
+            display: flex;
+            background: rgba(255,255,255,0.05);
+            padding: 0.4rem;
+            border-radius: 20px;
+            gap: 0.4rem;
+            border: 1px solid var(--card-border);
+        }
+
+        .sync-btn {
+            padding: 0.75rem 1.5rem;
+            border-radius: 16px;
+            border: none;
+            background: transparent;
+            color: var(--text-dim);
+            font-family: inherit;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            white-space: nowrap;
+        }
+
+        .sync-btn.active {
+            background: var(--accent);
+            color: #000;
+            box-shadow: 0 4px 15px rgba(29, 185, 84, 0.3);
+        }
+        
+        .sync-btn:not(.active):hover {
+            background: rgba(255,255,255,0.08);
+            color: #fff;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            transition: var(--transition);
+            margin-right: 0.5rem;
+        }
+        .status-dot.connected {
+            background: var(--accent);
+            box-shadow: 0 0 12px var(--accent);
+        }
+        .status-dot.disconnected {
+            background: #ff4444;
+            box-shadow: 0 0 12px #ff4444;
+        }
     </style>
 </head>
 <body>
@@ -817,6 +867,24 @@
                 <div class="line"></div>
             </div>
             <div id="song-grid" class="grid"></div>
+        </section>
+
+        <section>
+            <div class="section-header">
+                <h2>Sync Engine</h2>
+                <div id="ble-status-dot" class="status-dot disconnected"></div>
+                <div class="line"></div>
+            </div>
+            <div class="control-card" style="flex-direction: row; align-items: center; justify-content: space-between; padding: 1.5rem 2.5rem; flex-wrap: wrap; gap: 1.5rem;">
+                <div>
+                    <h3 style="margin: 0; font-size: 1.4rem;">Playback Timing</h3>
+                    <p style="color: var(--text-dim); font-size: 0.85rem; margin-top: 0.25rem;">Choose how LEDs react when a track starts</p>
+                </div>
+                <div class="sync-toggle-group">
+                    <button class="sync-btn active" id="sync-smart" onclick="setSyncMode('smart')">Smart Sync</button>
+                    <button class="sync-btn" id="sync-instant" onclick="setSyncMode('instant')">Instant</button>
+                </div>
+            </div>
         </section>
 
         <section>
@@ -1158,6 +1226,39 @@
             };
         });
 
+        // Sync Engine Logic
+        async function setSyncMode(mode) {
+            try {
+                const response = await fetch('/api/settings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ sync_mode: mode })
+                });
+                const data = await response.json();
+                
+                if (data.status === 'success') {
+                    document.querySelectorAll('.sync-btn').forEach(btn => btn.classList.remove('active'));
+                    document.getElementById(`sync-${mode}`).classList.add('active');
+                    showToast(`Sync Mode: ${mode.toUpperCase()}`);
+                }
+            } catch (err) {
+                showToast('Failed to update sync mode');
+            }
+        }
+
+        async function initSettings() {
+            try {
+                const response = await fetch('/api/settings');
+                const data = await response.json();
+                document.querySelectorAll('.sync-btn').forEach(btn => btn.classList.remove('active'));
+                const activeBtn = document.getElementById(`sync-${data.sync_mode}`);
+                if (activeBtn) activeBtn.classList.add('active');
+            } catch (err) {
+                console.error('Failed to load settings');
+            }
+        }
+        initSettings();
+
         // Status Polling
         let lastTitle = "";
         let lastColor = "";
@@ -1169,7 +1270,16 @@
                 const np = document.getElementById('now-playing');
                 const track = document.getElementById('track-name');
                 const icon = document.getElementById('playback-icon');
+                const bleDot = document.getElementById('ble-status-dot');
                 
+                if (data.ble_connected) {
+                    bleDot.classList.remove('disconnected');
+                    bleDot.classList.add('connected');
+                } else {
+                    bleDot.classList.remove('connected');
+                    bleDot.classList.add('disconnected');
+                }
+
                 if (data.title !== lastTitle) {
                     track.innerText = data.title;
                     lastTitle = data.title;
