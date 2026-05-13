@@ -1,4 +1,5 @@
-from flask import Flask, render_template
+from flask import Flask, render_template, request, jsonify
+import database
 import os
 import time
 import pyautogui
@@ -92,6 +93,9 @@ SONGS = {
         "hex": "7e0705030000ff10ef" # deep blue
     }
 }
+# --- DATABASE INITIALIZATION ---
+# Seed the DB with current hardcoded values if it doesn't exist
+database.init_db(PLAYLISTS, SONGS)
 # ---------------------
 
 # --- BLUETOOTH PERSISTENT WORKER ---
@@ -289,7 +293,38 @@ def playback_status():
 
 @app.route('/', methods=['GET'])
 def index():
-    return render_template('index.html', playlists=PLAYLISTS, songs=SONGS)
+    all_moods = database.get_all_moods()
+    # Categorize for the template
+    db_playlists = {m['name']: {'uri': m['uri'], 'hex': m['hex_color'], 'id': m['id']} for m in all_moods if not m['is_song']}
+    db_songs = {m['name']: {'uri': m['uri'], 'hex': m['hex_color'], 'id': m['id']} for m in all_moods if m['is_song']}
+    return render_template('index.html', playlists=db_playlists, songs=db_songs)
+
+@app.route('/api/moods', methods=['POST'])
+def add_new_mood():
+    data = request.json
+    name = data.get('name')
+    uri = data.get('uri')
+    hex_color = data.get('hex_color', '7e0705031db95410ef')
+    is_song = data.get('is_song', False)
+    
+    if database.add_mood(name, uri, hex_color, is_song):
+        return {"status": "success"}
+    return {"status": "error", "message": "Mood already exists"}, 400
+
+@app.route('/api/moods/<int:mood_id>', methods=['PUT'])
+def update_existing_mood(mood_id):
+    data = request.json
+    name = data.get('name')
+    uri = data.get('uri')
+    hex_color = data.get('hex_color')
+    
+    database.update_mood(mood_id, name, uri, hex_color)
+    return {"status": "success"}
+
+@app.route('/api/moods/<int:mood_id>', methods=['DELETE'])
+def delete_existing_mood(mood_id):
+    database.delete_mood(mood_id)
+    return {"status": "success"}
 
 from flask import request
 
@@ -320,24 +355,18 @@ def api_led_mode():
 
 @app.route('/<name>', methods=['GET'])
 def trigger_mood(name):
-    # Check if it's a playlist or a song
-    target = None
-    is_song = False
+    # Fetch from database instead of hardcoded dicts
+    target = database.get_mood_by_name(name)
     
-    if name in PLAYLISTS:
-        target = PLAYLISTS[name]
-    elif name in SONGS:
-        target = SONGS[name]
-        is_song = True
-        
     if target:
         print(f"Received request for /{name}")
+        is_song = target['is_song']
         
-        # Update global state so the UI knows which color to show immediately
+        # Update global state
         global current_color_hex
-        current_color_hex = target["hex"]
+        current_color_hex = target["hex_color"]
         
-        # Launch Spotify & Playback in a separate thread so Flask isn't blocked
+        # Launch Spotify & Playback in a separate thread
         threading.Thread(
             target=execute_playback, 
             args=(target["uri"], current_color_hex), 
