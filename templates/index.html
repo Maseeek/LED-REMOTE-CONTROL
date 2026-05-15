@@ -883,58 +883,41 @@
                 <div class="sync-toggle-group">
                     <button class="sync-btn active" id="sync-smart" onclick="setSyncMode('smart')">Smart Sync</button>
                     <button class="sync-btn" id="sync-instant" onclick="setSyncMode('instant')">Instant</button>
+                    <div style="width: 1px; height: 24px; background: var(--card-border); margin: 0 0.5rem;"></div>
+                    <button class="action-btn delete" title="Turn Off LEDs" onclick="powerOff()" style="width: 44px; height: 44px; border-radius: 12px; background: rgba(239, 68, 68, 0.1); border-color: rgba(239, 68, 68, 0.2); opacity: 1;">
+                        <svg viewBox="0 0 24 24" style="color: #ef4444;"><path d="M18.36 6.64a9 9 0 1 1-12.73 0"></path><line x1="12" y1="2" x2="12" y2="12"></line></svg>
+                    </button>
                 </div>
             </div>
         </section>
 
         <section>
             <div class="section-header">
-                <h2>LED Direct Control</h2>
+                <h2>Special Effects</h2>
                 <div class="line"></div>
             </div>
-            <div class="led-controls-grid">
-                <div class="control-card">
-                    <h3>Static Color</h3>
-                    <div class="color-picker-container">
+            <div id="effects-grid" class="grid"></div>
+            
+            <div class="control-card" style="margin-top: 2rem;">
+                <div style="display: flex; align-items: center; justify-content: space-between; gap: 2rem; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 200px;">
+                        <span class="control-label">Effect Speed</span>
+                        <input type="range" id="led-speed-range" class="custom-range" min="1" max="31" value="15" style="margin-top: 1rem;">
+                        <div style="display: flex; justify-content: space-between; color: var(--text-dim); font-size: 0.7rem; margin-top: 0.5rem; font-family: var(--mono);">
+                            <span>FAST</span>
+                            <span>SLOW</span>
+                        </div>
+                    </div>
+                    <div class="color-picker-container" style="flex: 1; min-width: 200px; padding: 1rem; background: rgba(255,255,255,0.03); border-radius: 20px; border: 1px solid var(--card-border);">
                         <input type="color" id="led-color-picker" value="#1db954">
                         <div style="flex: 1;">
-                            <div class="control-label">Custom Selection</div>
+                            <div class="control-label">Base Color</div>
                             <div class="preset-colors">
                                 <div class="preset-btn" style="background: #ff0000;" data-color="#ff0000"></div>
                                 <div class="preset-btn" style="background: #00ff00;" data-color="#00ff00"></div>
                                 <div class="preset-btn" style="background: #0000ff;" data-color="#0000ff"></div>
-                                <div class="preset-btn" style="background: #ffa500;" data-color="#ffa500"></div>
-                                <div class="preset-btn" style="background: #800080;" data-color="#800080"></div>
                                 <div class="preset-btn" style="background: #ffffff;" data-color="#ffffff"></div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="control-card">
-                    <h3>Dynamic Modes</h3>
-                    <div style="display: flex; flex-direction: column; gap: 1.25rem;">
-                        <div>
-                            <span class="control-label">Effect Mode</span>
-                            <select id="led-mode-select" class="custom-select" style="margin-top: 0.5rem;">
-                        <option value="128">Seven Color Cross Fade</option>
-                        <option value="129">Red Gradual Change</option>
-                        <option value="130">Green Gradual Change</option>
-                        <option value="131">Blue Gradual Change</option>
-                        <option value="132">Yellow Gradual Change</option>
-                        <option value="133">Cyan Gradual Change</option>
-                        <option value="134">Purple Gradual Change</option>
-                        <option value="135">White Gradual Change</option>
-                        <option value="136">Red Green Cross Fade</option>
-                        <option value="137">Red Blue Cross Fade</option>
-                        <option value="138">Green Blue Cross Fade</option>
-                        <option value="139">Seven Color Strobe Flash</option>
-                        <option value="147">Seven Color Jumping Change</option>
-                            </select>
-                        </div>
-                        
-                        <div>
-                            <span class="control-label">Speed (Fast → Slow)</span>
-                            <input type="range" id="led-speed-range" class="custom-range" min="1" max="31" value="10" style="margin-top: 1rem;">
                         </div>
                     </div>
                 </div>
@@ -975,7 +958,12 @@
                 const b = parseInt(hex.slice(12, 14), 16);
                 return `rgba(${r}, ${g}, ${b}, ${alpha})`;
             }
-            // Fallback for modes or unknown formats (Spotify Green)
+            // If it's a mode command (14 chars: 7e0503MMSSffef)
+            if (hex.length === 14 && hex.startsWith('7e0503')) {
+                // Return a vibrant purple/blue for effects
+                return `rgba(168, 85, 247, ${alpha})`;
+            }
+            // Fallback (Spotify Green)
             return `rgba(29, 185, 84, ${alpha})`;
         }
 
@@ -1164,6 +1152,81 @@
         Object.entries(songs).forEach(([name, data]) => sGrid.appendChild(createCard(name, data, 'Track')));
         sGrid.appendChild(createAddCard('Track'));
 
+        // Special Effects Config
+        const effects = [
+            { id: 127, name: 'Seven Color Fade', icon: '<svg viewBox="0 0 24 24"><path d="M12 2v20M2 12h20M5.6 5.6l12.8 12.8M5.6 18.4L18.4 5.6"></path></svg>' },
+            { id: 138, name: 'Seven Color Strobe', icon: '<svg viewBox="0 0 24 24"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path></svg>' },
+            { id: 146, name: 'RGB Jump', icon: '<svg viewBox="0 0 24 24"><path d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>' },
+            { id: 139, name: 'Red Strobe', icon: '<div style="width:12px;height:12px;border-radius:50%;background:#ff0000;box-shadow:0 0 10px #ff0000;"></div>' },
+            { id: 140, name: 'Green Strobe', icon: '<div style="width:12px;height:12px;border-radius:50%;background:#00ff00;box-shadow:0 0 10px #00ff00;"></div>' },
+            { id: 141, name: 'Blue Strobe', icon: '<div style="width:12px;height:12px;border-radius:50%;background:#0000ff;box-shadow:0 0 10px #0000ff;"></div>' },
+            { id: 142, name: 'Yellow Strobe', icon: '<div style="width:12px;height:12px;border-radius:50%;background:#ffff00;box-shadow:0 0 10px #ffff00;"></div>' }
+        ];
+
+        function createEffectCard(effect) {
+            const card = document.createElement('div');
+            card.className = 'card effect-card';
+            card.dataset.id = effect.id;
+            
+            const color = 'rgba(168, 85, 247, 1)';
+            const lightColor = 'rgba(168, 85, 247, 0.1)';
+            card.style.setProperty('--glow-color', color);
+            
+            card.innerHTML = `
+                <div class="card-glow"></div>
+                <div class="card-icon" style="color: ${color}; background: ${lightColor};">
+                    ${effect.icon}
+                </div>
+                <div style="z-index: 1; position: relative;">
+                    <span class="type">Special Mode</span>
+                    <h3 style="color: #fff">${effect.name}</h3>
+                </div>
+            `;
+
+            card.onclick = async () => {
+                const isActive = card.classList.contains('active');
+                
+                document.querySelectorAll('.effect-card').forEach(c => c.classList.remove('active', 'loading'));
+                
+                if (isActive) {
+                    // Toggle OFF -> Return to last static color
+                    showToast('Disabling Effect...');
+                    try {
+                        await fetch('/api/led/mode', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ toggle_off: true })
+                        });
+                    } catch (err) { showToast('Toggle Failed'); }
+                } else {
+                    // Toggle ON
+                    card.classList.add('loading');
+                    const speed = document.getElementById('led-speed-range').value;
+                    try {
+                        const response = await fetch('/api/led/mode', {
+                            method: 'POST',
+                            headers: {'Content-Type': 'application/json'},
+                            body: JSON.stringify({ mode: effect.id, speed: parseInt(speed) })
+                        });
+                        if (response.ok) {
+                            card.classList.remove('loading');
+                            card.classList.add('active');
+                            showToast(`${effect.name} Active`);
+                        }
+                    } catch (err) {
+                        card.classList.remove('loading');
+                        showToast('Connection Refused');
+                    }
+                }
+            };
+
+            return card;
+        }
+
+        // Initialize Effect Grid
+        const eGrid = document.getElementById('effects-grid');
+        effects.forEach(eff => eGrid.appendChild(createEffectCard(eff)));
+
         // Debounce helper
         function debounce(func, wait) {
             let timeout;
@@ -1189,16 +1252,22 @@
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({r, g, b})
                 });
+                // When picking a color, deactivate any active effects in UI
+                document.querySelectorAll('.effect-card').forEach(c => c.classList.remove('active'));
+                
                 document.querySelectorAll('.blob').forEach(blob => blob.style.background = colorHex);
                 const picker = document.getElementById('led-color-picker');
                 picker.style.boxShadow = `0 0 30px ${colorHex}40`;
             } catch (err) {
                 showToast('Failed to set color');
             }
-        }, 50); // Small debounce for efficient time transfer during dragging
+        }, 50);
 
         const handleModeChange = debounce(async () => {
-            const mode = document.getElementById('led-mode-select').value;
+            const activeEffect = document.querySelector('.effect-card.active');
+            if (!activeEffect) return;
+            
+            const mode = activeEffect.dataset.id;
             const speed = document.getElementById('led-speed-range').value;
             
             try {
@@ -1208,12 +1277,11 @@
                     body: JSON.stringify({mode: parseInt(mode), speed: parseInt(speed)})
                 });
             } catch (err) {
-                showToast('Failed to set mode');
+                showToast('Failed to update speed');
             }
         }, 100);
 
         document.getElementById('led-color-picker').addEventListener('input', (e) => handleColorChange(e.target.value));
-        document.getElementById('led-mode-select').addEventListener('change', handleModeChange);
         document.getElementById('led-speed-range').addEventListener('input', handleModeChange);
 
         // Preset buttons
@@ -1292,18 +1360,49 @@
                     
                     // Sync background blobs with the current LED color
                     document.querySelectorAll('.blob').forEach(b => b.style.background = activeColor);
+                    
+                    // Highlight active effect card if applicable
+                    if (data.color.startsWith('7e0503')) {
+                        const modeId = parseInt(data.color.slice(6, 8), 16);
+                        document.querySelectorAll('.effect-card').forEach(card => {
+                            if (parseInt(card.dataset.id) === modeId) {
+                                card.classList.add('active');
+                            } else {
+                                card.classList.remove('active');
+                            }
+                        });
+                    } else {
+                        document.querySelectorAll('.effect-card').forEach(card => card.classList.remove('active'));
+                    }
+
                     lastColor = data.color;
                 }
 
                 if (data.playing) {
                     np.classList.remove('paused');
-                    icon.innerHTML = '<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>';
+                    const pauseIcon = '<rect x="6" y="4" width="4" height="16"></rect><rect x="14" y="4" width="4" height="16"></rect>';
+                    if (icon.innerHTML !== pauseIcon) icon.innerHTML = pauseIcon;
                 } else {
                     np.classList.add('paused');
-                    icon.innerHTML = '<path d="M5 3l14 9-14 9V3z"></path>';
+                    const playIcon = '<path d="M5 3l14 9-14 9V3z"></path>';
+                    if (icon.innerHTML !== playIcon) icon.innerHTML = playIcon;
                 }
             } catch (err) {
                 // Silently fail or show small indicator
+            }
+        }
+
+        async function powerOff() {
+            try {
+                await fetch('/api/led/color', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({r: 0, g: 0, b: 0})
+                });
+                showToast('LEDs Powered Off');
+                document.querySelectorAll('.card').forEach(c => c.classList.remove('active'));
+            } catch (err) {
+                showToast('Failed to power off');
             }
         }
 

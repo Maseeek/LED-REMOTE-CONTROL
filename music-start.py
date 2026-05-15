@@ -26,6 +26,7 @@ CHAR_UUID = os.getenv("LED_CHAR_UUID", "0000fff3-0000-1000-8000-00805f9b34fb")
 # --- GLOBAL STATE ---
 color_queue = queue.Queue()
 current_color_hex = "7e0705031db95410ef" # Default Spotify Green
+last_static_color = "7e0705031db95410ef" # Keep track for toggling back from modes
 SYNC_MODE = "smart" # Options: "instant", "smart"
 BLE_CONNECTED = False
 
@@ -44,12 +45,13 @@ class LEDCommand:
     def mode(mode_id, speed):
         """
         Generates a dynamic mode command. 
-        Usually mode_id ranges from 128 (0x80) to 159 (0x9f) for typical BLE controllers.
-        Speed ranges from 1 (fastest) to 31 (slowest).
+        Ensures a consistent 9-byte length as required by many ELK-BLEDOM controllers.
         """
         mode_id = max(0, min(255, int(mode_id)))
         speed = max(0, min(255, int(speed)))
-        return f"7e0503{mode_id:02x}{speed:02x}ffef"
+        # Format: 7e [len] 03 [mode] [speed] 00 00 00 ef
+        # We use 05 as length byte for the payload part
+        return f"7e0503{mode_id:02x}{speed:02x}000000ef"
 
 # --- UPDATED CONFIGURATION ---
 PLAYLISTS = {
@@ -114,26 +116,37 @@ async def ble_async_worker():
     print("DEBUG: BLE Async worker is starting...")
     while True:
         try:
-            print(f"Connecting to LEDs at {MAC_ADDR}...", flush=True)
-            async with BleakClient(MAC_ADDR) as client:
+            from bleak import BleakScanner
+            print(f"Scanning for LEDs at {MAC_ADDR}...", flush=True)
+            device = await BleakScanner.find_device_by_address(MAC_ADDR, timeout=10.0)
+            
+            if not device:
+                print(f"Device {MAC_ADDR} not found during scan. Retrying...", flush=True)
+                await asyncio.sleep(5)
+                continue
+
+            print(f"Found {device.name}. Connecting...", flush=True)
+            async with BleakClient(device) as client:
                 BLE_CONNECTED = True
                 print(f"BLE Connected to {MAC_ADDR}!", flush=True)
                 while True:
                     try:
                         # Wait for a color update from the queue
-                        # Using a thread-safe way to get from the queue
                         loop = asyncio.get_event_loop()
                         hex_val = await loop.run_in_executor(None, lambda: color_queue.get(timeout=2.0))
                         print(f"BLE Worker: Sending {hex_val}", flush=True)
                         
-                        # Optimise for efficient time transfer: skip to latest if flooded
+                        # Optimise: skip to latest if flooded, but don't block
                         while not color_queue.empty():
-                            hex_val = color_queue.get()
+                            try:
+                                hex_val = color_queue.get_nowait()
+                            except queue.Empty:
+                                break
                         
                         if client.is_connected:
-                            # response=False makes the write much faster (no handshake)
-                            await client.write_gatt_char(CHAR_UUID, bytes.fromhex(hex_val), response=False)
-                            print(f"Instant BLE Update: {hex_val}")
+                            # Use default response mode (will use 'write with response' or 'write without response' automatically)
+                            await client.write_gatt_char(CHAR_UUID, bytes.fromhex(hex_val))
+                            print(f"BLE Write Success: {hex_val}")
                         else:
                             # Re-queue the color and reconnect
                             color_queue.put(hex_val)
@@ -141,6 +154,9 @@ async def ble_async_worker():
                     except queue.Empty:
                         if not client.is_connected:
                             break
+                        # Heartbeat every ~10s if idle
+                        if time.time() % 10 < 2:
+                            print("BLE Worker: Idle & Connected.", flush=True)
                         continue
         except Exception as e:
             BLE_CONNECTED = False
@@ -302,6 +318,7 @@ async def _async_get_spotify_status():
                 "playing": is_playing,
                 "title": title if is_playing else "Paused",
                 "color": current_color_hex,
+                "last_static_color": last_static_color,
                 "ble_connected": BLE_CONNECTED,
                 "sync_mode": SYNC_MODE
             }
@@ -311,6 +328,7 @@ async def _async_get_spotify_status():
         "playing": False, 
         "title": "Spotify Closed", 
         "color": current_color_hex,
+        "last_static_color": last_static_color,
         "ble_connected": BLE_CONNECTED,
         "sync_mode": SYNC_MODE
     }
@@ -379,8 +397,9 @@ def api_led_color():
     r, g, b = data.get('r', 0), data.get('g', 0), data.get('b', 0)
     hex_cmd = LEDCommand.color(r, g, b)
     
-    global current_color_hex
+    global current_color_hex, last_static_color
     current_color_hex = hex_cmd
+    last_static_color = hex_cmd
     
     color_queue.put(hex_cmd)
     return {"status": "success", "color": hex_cmd}
@@ -390,11 +409,16 @@ def api_led_mode():
     data = request.json
     mode_id = data.get('mode', 128)
     speed = data.get('speed', 10)
-    hex_cmd = LEDCommand.mode(mode_id, speed)
+    toggle_off = data.get('toggle_off', False)
     
-    global current_color_hex
+    global current_color_hex, last_static_color
+    
+    if toggle_off:
+        hex_cmd = last_static_color
+    else:
+        hex_cmd = LEDCommand.mode(mode_id, speed)
+    
     current_color_hex = hex_cmd
-    
     color_queue.put(hex_cmd)
     return {"status": "success", "color": hex_cmd}
 
@@ -408,8 +432,9 @@ def trigger_mood(name):
         is_song = target['is_song']
         
         # Update global state
-        global current_color_hex
+        global current_color_hex, last_static_color
         current_color_hex = target["hex_color"]
+        last_static_color = target["hex_color"]
         
         # Launch Spotify & Playback in a separate thread
         threading.Thread(
